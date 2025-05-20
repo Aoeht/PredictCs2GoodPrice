@@ -8,6 +8,11 @@ import time
 import csv
 from translate_good_name import translate_good_name as translate
 import re
+import csv_procession
+import glob
+
+import pandas as pd
+import os
 #定义cs2饰品这个类
 class CsGood:
     def __init__(self,url):
@@ -37,7 +42,7 @@ class CsGood:
             good_name = WebDriverWait(driver, 10).until(EC.presence_of_element_located(
                 (By.CSS_SELECTOR, ".scope_summery___3R1Bq > div:nth-child(4) > h3:nth-child(1)"))).text
             # 存放饰品数据的名字
-            self.name=good_name
+            self.name= translate(good_name)
             # 选择uu的数据（默认出售价）
             youyou_choice = WebDriverWait(driver, 10).until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, "li.ant-dropdown-menu-item:nth-child(2)")))
@@ -59,6 +64,8 @@ class CsGood:
                 print(f'''获取{GOOD_DATA_KIND[j]}中''')
                 price_button_css = "li[role='menuitem'][value='" + GOOD_DATA_KIND[j] + "']"
                 file_path = "./dataset/" + translate(good_name) + "_" + GOOD_DATA_KIND[j] + ".csv"
+
+                csv_processed_path="./dataset_processed/" + translate(good_name) + "_" + GOOD_DATA_KIND[j] + ".csv"
 
                 data_choice = WebDriverWait(driver, 10).until(
                     EC.element_to_be_clickable((By.CSS_SELECTOR, "button.dropdown_right___PeSeO:nth-child(1)")))
@@ -122,6 +129,8 @@ class CsGood:
                 with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
                     csv_writer = csv.writer(csvfile)
                     csv_writer.writerows(results)
+                func_name="csv_process_"+GOOD_DATA_KIND[j]
+                getattr(csv_procession,func_name)(file_path,csv_processed_path)
 
 
 
@@ -132,6 +141,35 @@ class CsGood:
         finally:
             driver.quit()
 
+    def convert2csv(self):
+        if not os.path.exists("./data"):
+            os.mkdir("./data")
+        output_path = "./data/" + self.name + ".csv"
+        # 获取文件夹中所有CSV文件的路径
+        csv_files = glob.glob('./dataset_processed/*.csv')
+        # 创建一个空的DataFrame用于合并数据
+        merged_df = pd.DataFrame()
+
+        # 读取每个CSV文件并进行合并
+        for file in csv_files:
+            df = pd.read_csv(file)
+
+            # 确保日期列为 datetime 类型，并指定日期格式
+            df['日期'] = pd.to_datetime(df['日期'], format='%Y-%m-%d')
+
+            # 如果是第一个文件，初始化 merged_df，否则合并
+            if merged_df.empty:
+                merged_df = df
+            else:
+                merged_df = pd.merge(merged_df, df, on='日期', how='outer')  # 使用 'outer' 合并，确保所有日期都有数据
+
+        merged_df = merged_df.replace("", pd.NA)
+        # 将合并后的DataFrame保存为一个新的CSV文件
+
+        merged_df.to_csv(output_path, index=False)
+
+
 butcher_automatic=CsGood("https://csqaq.com/goods/7041")
-butcher_automatic.crawldata(steps=175,delay=0.25)
+butcher_automatic.crawldata(steps=300,delay=0.15)
+butcher_automatic.convert2csv()
 
